@@ -6,7 +6,7 @@ A better version of cp with parallel processing support
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, Center
-from textual.widgets import Header, Footer, Button, Static, Input, Checkbox, Log, Select, Label, DirectoryTree
+from textual.widgets import Header, Footer, Button, Static, Input, Checkbox, Log, Label, DirectoryTree, RadioButton, RadioSet
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual import on
@@ -16,8 +16,10 @@ import os
 from pathlib import Path
 
 
-class FilePickerScreen(ModalScreen):
-    """Modal screen for file/directory selection."""
+    BINDINGS = [
+        Binding("x", "btn_select", "Seç", show=False),
+        Binding("escape,z", "btn_cancel", "İptal", show=False),
+    ]
 
     CSS = """
     FilePickerScreen {
@@ -107,6 +109,14 @@ class FilePickerScreen(ModalScreen):
         """Cancel selection."""
         self.dismiss(None)
 
+    def action_btn_select(self) -> None:
+        """Select via keyboard [x]."""
+        self.on_select()
+
+    def action_btn_cancel(self) -> None:
+        """Cancel via keyboard [z or escape]."""
+        self.on_cancel()
+
 
 class CpppTUI(App):
     """A Textual app for cppp (cp++) - Everforest Theme."""
@@ -119,7 +129,7 @@ class CpppTUI(App):
 
     #app-container {
         width: 90;
-        height: 44;
+        height: 40;
         background: #2b3339;
         border: thick #a7c080;
     }
@@ -171,8 +181,29 @@ class CpppTUI(App):
         border: solid #4f585e;
     }
 
-    Select:focus {
+    RadioSet {
+        width: auto;
+        height: 3;
+        background: transparent;
+        layout: horizontal;
+    }
+
+    RadioButton {
+        width: auto;
+        height: 3;
+        background: #232a2e;
+        color: #d3c6aa;
+        border: solid #4f585e;
+        margin-right: 1;
+    }
+
+    RadioButton:focus {
         border: solid #a7c080;
+    }
+
+    RadioButton.-selected {
+        background: #a7c080;
+        color: #2b3339;
     }
 
     .browse-btn {
@@ -200,7 +231,7 @@ class CpppTUI(App):
     }
 
     #logs-section {
-        height: 10;
+        height: 13;
         padding: 0;
         margin: 0 1;
     }
@@ -213,22 +244,20 @@ class CpppTUI(App):
         text-style: bold;
     }
 
-    Log {
-        height: 9;
-        background: #232a2e;
-        color: #d3c6aa;
-        border: none;
-        padding: 0 1;
-    }
-
     #progress-section {
-        height: 3;
+        height: 1;
         content-align: center middle;
         background: #272e33;
         color: #a7c080;
         text-style: bold;
-        border: solid #e67e80;
-        margin: 1 1 0 1;
+    }
+
+    Log {
+        height: 11;
+        background: #232a2e;
+        color: #d3c6aa;
+        border: none;
+        padding: 0 1;
     }
 
     #buttons-section {
@@ -291,6 +320,9 @@ class CpppTUI(App):
         Binding("ctrl+c", "quit", "Çıkış", show=False),
         Binding("s", "toggle_start", "Başlat/Durdur", show=True),
         Binding("h", "show_help", "Yardım", show=True),
+        Binding("i", "focus_input", "Kaynak", show=True),
+        Binding("o", "focus_output", "Hedef", show=True),
+        Binding("t", "focus_thread", "Thread", show=True),
     ]
 
     def __init__(self):
@@ -307,14 +339,14 @@ class CpppTUI(App):
             
             # Input section
             with Vertical(classes="section"):
-                # Mode selection
+                # Mode selection with radio buttons
                 with Horizontal(classes="input-row"):
                     yield Label("Mod:", classes="input-label")
-                    yield Select(
-                        [("Kopyala", "copy"), ("Taşı", "move")],
-                        value="copy",
-                        id="mode_select"
-                    )
+                    with RadioSet(id="mode_select"):
+                        yield RadioButton("Kopyala", value=True, id="mode_copy")
+                        yield RadioButton("Taşı", id="mode_move")
+                    yield Label("Thread:", classes="input-label")
+                    yield Input(value="4", id="parts")
                 
                 # Input paths
                 with Horizontal(classes="input-row"):
@@ -327,11 +359,6 @@ class CpppTUI(App):
                     yield Label("Hedef Yolu:", classes="input-label")
                     yield Input(placeholder="Örn: /hedef/klasor/", id="output_path")
                     yield Button("📁", id="btn_browse_output", classes="browse-btn")
-                
-                # Parts (threads)
-                with Horizontal(classes="input-row"):
-                    yield Label("Thread:", classes="input-label")
-                    yield Input(value="4", id="parts")
             
             # Options section
             with Horizontal(classes="section options-row"):
@@ -367,7 +394,8 @@ class CpppTUI(App):
         log.write_line("  2. Thread sayısını ayarlayın (4-20)")
         log.write_line("  3. '▶ İşlemi Başlat' butonuna basın")
         log.write_line("")
-        log.write_line("⌨️  [s] Başlat | [h] Yardım | [q] Çıkış")
+        log.write_line("⌨️  [i] Kaynak | [o] Hedef | [t] Thread")
+        log.write_line("    [s] Başlat | [h] Yardım | [q] Çıkış")
         log.write_line("")
 
     @on(Button.Pressed, "#btn_browse_input")
@@ -437,9 +465,16 @@ class CpppTUI(App):
         log.write_line("   • SHA-256 (-c): Kopyalama sonrası bütünlük kontrolü")
         log.write_line("")
         log.write_line("⌨️  Klavye Kısayolları:")
+        log.write_line("   [i] → Kaynak yoluna odaklan")
+        log.write_line("   [o] → Hedef yoluna odaklan")
+        log.write_line("   [t] → Thread sayısına odaklan")
         log.write_line("   [s] → İşlemi Başlat/Durdur")
         log.write_line("   [h] → Bu yardım ekranı")
         log.write_line("   [q] → Çıkış")
+        log.write_line("")
+        log.write_line("   Dosya Seçici:")
+        log.write_line("   [x] → Seçili dosyayı onayla")
+        log.write_line("   [z] veya [Esc] → İptal")
         log.write_line("")
         log.write_line("📝 Komut Satırı Örnekleri:")
         log.write_line("   cppp -i dosya.txt -o /hedef/ -p 4 -v")
@@ -469,7 +504,10 @@ class CpppTUI(App):
         input_path = self.query_one("#input_path", Input).value.strip()
         output_path = self.query_one("#output_path", Input).value.strip()
         parts = self.query_one("#parts", Input).value.strip()
-        mode = self.query_one("#mode_select", Select).value
+        
+        # Get mode from radio buttons
+        mode_radio = self.query_one("#mode_select", RadioSet)
+        mode = "copy" if mode_radio.pressed_button.id == "mode_copy" else "move"
         
         # Get checkboxes
         verbose = self.query_one("#verbose", Checkbox).value
@@ -647,6 +685,18 @@ class CpppTUI(App):
         """Toggle start/stop via keyboard."""
         button = self.query_one("#btn_start", Button)
         button.press()
+
+    def action_focus_input(self) -> None:
+        """Focus on input path."""
+        self.query_one("#input_path", Input).focus()
+
+    def action_focus_output(self) -> None:
+        """Focus on output path."""
+        self.query_one("#output_path", Input).focus()
+
+    def action_focus_thread(self) -> None:
+        """Focus on thread input."""
+        self.query_one("#parts", Input).focus()
 
 
 def main():
